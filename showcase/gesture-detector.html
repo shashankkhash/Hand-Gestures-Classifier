@@ -1,0 +1,331 @@
+<title>Down-Gesture Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one 1040px reading column; hero splits into thesis + live pixel grid; sections stack with figures inline */
+:root {
+  --bg: #F3F5F7; --surface: #FCFCFB; --ink: #16202B; --ink-2: #4A5664; --muted: #6B7684;
+  --rule: #D9DFE6; --grid: #E6EAEF;
+  --test: #2F5BD3; --train: #C26A12; --down: #C26A12; --down-soft: #F6E6D3; --bad: #B4332A;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12171D; --surface: #1A1A19; --ink: #E8ECF0; --ink-2: #B3BDC8; --muted: #8E99A6;
+  --rule: #2D3640; --grid: #252D36; --test: #6E8DEB; --train: #C97A2A; --down: #D98A36; --down-soft: #3A2A18; --bad: #E2675C;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12171D; --surface: #1A1A19; --ink: #E8ECF0; --ink-2: #B3BDC8; --muted: #8E99A6;
+  --rule: #2D3640; --grid: #252D36; --test: #6E8DEB; --train: #C97A2A; --down: #D98A36; --down-soft: #3A2A18; --bad: #E2675C;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: grid; gap: 72px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; letter-spacing: -0.01em }
+h1 { font-size: clamp(2.1rem, 5.2vw, 3.4rem); font-weight: 700 }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600 }
+h3 { font-size: 1.1rem; font-weight: 600 }
+p { margin: 0; max-width: 65ch; color: var(--ink-2) }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
+a { color: var(--test) }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--test); outline-offset: 2px }
+section { display: grid; gap: 20px }
+.lede { font-size: 1.15rem }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: center }
+.hero-text { display: grid; gap: 20px; min-width: 0 }
+.stats { display: flex; flex-wrap: wrap; gap: 12px 36px; padding-top: 8px; border-top: 1px solid var(--rule) }
+.stat { display: grid; gap: 2px }
+.stat b { font-family: var(--display); font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink) }
+.stat span { font-size: 13px; color: var(--muted) }
+.pixfig { display: grid; gap: 10px; justify-items: center; margin: 0 }
+.pixfig canvas { width: 100%; max-width: 360px; aspect-ratio: 30 / 32; image-rendering: pixelated; border-radius: 4px; cursor: crosshair; display: block }
+.pixfig figcaption { font-size: 13px; color: var(--muted); text-align: center; min-height: 2.6em }
+.pixfig figcaption .mono { color: var(--ink) }
+
+/* gallery */
+.gallery { overflow-x: auto }
+.gallery table { border-collapse: separate; border-spacing: 8px; margin: -8px }
+.gallery th { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; text-align: center }
+.gallery th.down { color: var(--down) }
+.gallery th[scope=row] { text-align: right; padding-right: 4px; white-space: nowrap }
+.gallery td { padding: 0 }
+.gallery img { width: 88px; height: auto; image-rendering: pixelated; display: block; border-radius: 3px; border: 2px solid transparent }
+.gallery td.down img { border-color: var(--down) }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 14px; color: var(--ink-2) }
+.facts b { color: var(--ink); font-variant-numeric: tabular-nums }
+
+/* network */
+.net { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; overflow-x: auto }
+.net svg { display: block; width: 100%; min-width: 560px; height: auto }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; list-style: none; margin: 0; padding: 0; counter-reset: s }
+.steps li { display: grid; gap: 6px; counter-increment: s; min-width: 0 }
+.steps li::before { content: "Step " counter(s); font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase }
+.steps p { font-size: 15px }
+
+/* chart */
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; display: grid; gap: 12px }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; align-items: baseline }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2) }
+.legend span { display: inline-flex; align-items: center; gap: 6px }
+.legend i { width: 16px; height: 2px; display: inline-block }
+.plot { position: relative }
+.plot svg { display: block; width: 100%; height: auto; overflow: visible }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 8px 10px; border-radius: 6px; white-space: nowrap; line-height: 1.5; transform: translate(-50%, -110%) }
+.tip .k { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px }
+details { font-size: 14px; color: var(--ink-2) }
+summary { cursor: pointer; color: var(--muted) }
+.tbl { overflow-x: auto; max-height: 280px; margin-top: 8px }
+.tbl table { border-collapse: collapse; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums }
+.tbl th, .tbl td { padding: 3px 14px 3px 0; text-align: right; border-bottom: 1px solid var(--grid) }
+
+/* results */
+.results { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 40px; align-items: start }
+.cm { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; font-size: 13px }
+.cm .h { color: var(--muted); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: end; justify-content: center; padding: 4px; text-align: center }
+.cm .r { justify-content: flex-end; align-items: center; text-align: right }
+.cm .c { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 14px 8px; text-align: center; display: grid; gap: 2px }
+.cm .c b { font-family: var(--display); font-size: 1.8rem; font-variant-numeric: tabular-nums }
+.cm .c small { color: var(--muted) }
+.cm .c.ok b { color: var(--ink) }
+.cm .c.no b { color: var(--bad) }
+.miss { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px }
+.miss figure { margin: 0; display: grid; gap: 6px; min-width: 0 }
+.miss img { width: 100%; image-rendering: pixelated; border-radius: 3px; display: block }
+.miss figcaption { font-size: 12px; line-height: 1.45; color: var(--muted) }
+.miss figcaption b { color: var(--ink); font-weight: 600 }
+.callout { border-left: 3px solid var(--down); padding: 4px 0 4px 16px }
+
+footer { border-top: 1px solid var(--rule); padding-top: 20px; display: grid; gap: 10px; font-size: 14px }
+footer p { font-size: 14px }
+
+@media (max-width: 760px) {
+  .hero, .results { grid-template-columns: minmax(0, 1fr) }
+  .hero { gap: 28px }
+  .gallery img { width: 64px }
+}
+</style>
+
+<main class="wrap">
+  <header class="hero">
+    <div class="hero-text">
+      <span class="eyebrow">Neural network from scratch · Python + NumPy</span>
+      <h1>Spotting a downward hand in 960 pixels</h1>
+      <p class="lede">A small neural network, written by hand without an ML framework, looks at a tiny grayscale photo of a hand and decides one thing: is this the “down” gesture or not?</p>
+      <div class="stats">
+        <div class="stat"><b id="s-acc">–</b><span>accuracy on unseen photos</span></div>
+        <div class="stat"><b id="s-base">–</b><span>if it always guessed “not down”</span></div>
+        <div class="stat"><b>13</b><span>people photographed</span></div>
+      </div>
+    </div>
+    <figure class="pixfig">
+      <canvas id="pix" width="300" height="320" aria-label="A 32 by 30 pixel grayscale photo of a hand making the down gesture, enlarged"></canvas>
+      <figcaption id="pixcap">One training image, enlarged. Hover a pixel to see the number the network receives.</figcaption>
+    </figure>
+  </header>
+
+  <section>
+    <span class="eyebrow">The data</span>
+    <h2>Four gestures, thirteen people, one question</h2>
+    <p>Each photo is 32 pixels tall and 30 wide, in grayscale. Thirteen volunteers (A to M) each held their hand in four poses. The network only has to separate <strong style="color:var(--down)">down</strong> from the other three, which makes this a yes-or-no problem.</p>
+    <div class="gallery">
+      <table id="gallery"></table>
+    </div>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <section>
+    <span class="eyebrow">How it works</span>
+    <h2>Three layers and a lot of small corrections</h2>
+    <p>Every pixel becomes a number between 0 (black) and 1 (white). Those 960 numbers feed 100 hidden units, and each hidden unit learns its own weighted mix of the pixels. A single output unit combines the hidden units into a score between 0 and 1. A score of 0.5 or more means “down”.</p>
+    <div class="net"><svg id="net" viewBox="0 0 760 300" role="img" aria-label="Network diagram: 960 pixel inputs connect to 100 hidden units, which connect to one output"></svg></div>
+    <ol class="steps">
+      <li><h3>Guess</h3><p>Pass a photo through the network and read the score, starting from small random weights.</p></li>
+      <li><h3>Measure the miss</h3><p>Compare the score with the right answer (1 for down, 0 otherwise) using squared error.</p></li>
+      <li><h3>Nudge every weight</h3><p>Backpropagation works out how much each of the ~96,000 weights caused the miss and moves it slightly the other way, with a learning rate of 0.1.</p></li>
+      <li><h3>Repeat</h3><p>Do this for every training photo, then go through the whole set again. The script runs 1,000 passes (epochs).</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="eyebrow">Training</span>
+    <h2>It memorises the training set, and still generalises</h2>
+    <p>For the first few dozen passes the network just says “not down” for everything. Then it starts picking up the shape of the gesture. Training accuracy reaches 100%, while accuracy on photos it never trained on settles around 91%, well above the 78% you would get by always saying “not down”.</p>
+    <div class="chart">
+      <div class="chart-head">
+        <h3>Accuracy by training pass</h3>
+        <div class="legend">
+          <span><i style="background:var(--train)"></i>Training photos</span>
+          <span><i style="background:var(--test)"></i>Unseen test photos</span>
+          <span><i style="background:repeating-linear-gradient(90deg,var(--muted) 0 4px,transparent 4px 7px)"></i>Always “not down”</span>
+        </div>
+      </div>
+      <div class="plot" id="plot"><div class="tip" id="tip" hidden></div></div>
+      <details><summary>Show the numbers as a table</summary><div class="tbl"><table id="tbl"></table></div></details>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Results</span>
+    <h2>Where it gets it wrong</h2>
+    <div class="results">
+      <div style="display:grid;gap:12px">
+        <div class="cm" id="cm"></div>
+        <p style="font-size:14px">Test set of <span id="ntest"></span> photos the network never saw while training.</p>
+      </div>
+      <div style="display:grid;gap:16px;min-width:0">
+        <p class="callout" id="insight"></p>
+        <div class="miss" id="miss"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="eyebrow">About these numbers</span>
+    <p>The original script loops over every weight in plain Python. To make 1,000 epochs practical, the results here come from a NumPy version of the same algorithm: the same 960‑100‑1 sigmoid network, weight initialisation, per-photo updates, learning rate and epoch count, with a fixed random seed. The image lists in the repo name <span id="nmissing"></span> files that are not in the <span class="mono">gestures/</span> folder, so training used the <span id="npresent"></span> photos that exist. A different seed will move test accuracy by a few points.</p>
+    <p>Source: <a href="https://github.com/shashankkhash/Hand-Gestures-Classifier" target="_blank" rel="noopener">shashankkhash/Hand-Gestures-Classifier</a></p>
+  </footer>
+</main>
+
+<script>
+const D = {"n_train": 170, "n_test": 76, "pos_train": 46, "pos_test": 17, "hist": [{"epoch": 1, "train_acc": 0.7294117647058823, "test_acc": 0.7763157894736842, "train_mse": 0.22623325805952021, "test_mse": 0.18894118811040106}, {"epoch": 2, "train_acc": 0.7294117647058823, "test_acc": 0.7763157894736842, "train_mse": 0.22454692513257082, "test_mse": 0.18794722270932823}, {"epoch": 3, "train_acc": 0.7294117647058823, "test_acc": 0.7763157894736842, "train_mse": 0.22306553832436424, "test_mse": 0.18714359868502362}, {"epoch": 5, "train_acc": 0.7294117647058823, "test_acc": 0.7763157894736842, "train_mse": 0.22075924910416167, "test_mse": 0.185937189972223}, {"epoch": 10, "train_acc": 0.7294117647058823, "test_acc": 0.7763157894736842, "train_mse": 0.2213503883487055, "test_mse": 0.1851148848938584}, {"epoch": 20, "train_acc": 0.7941176470588235, "test_acc": 0.7894736842105263, "train_mse": 0.15530542522365764, "test_mse": 0.15758787706120256}, {"epoch": 30, "train_acc": 0.8058823529411765, "test_acc": 0.7105263157894737, "train_mse": 0.1324806624417147, "test_mse": 0.16496299151721203}, {"epoch": 40, "train_acc": 0.8294117647058824, "test_acc": 0.7763157894736842, "train_mse": 0.1101698912858782, "test_mse": 0.1485775312114229}, {"epoch": 50, "train_acc": 0.8235294117647058, "test_acc": 0.7894736842105263, "train_mse": 0.10407753807437592, "test_mse": 0.15287879611312546}, {"epoch": 60, "train_acc": 0.8294117647058824, "test_acc": 0.7763157894736842, "train_mse": 0.10070019719345052, "test_mse": 0.15707461156596772}, {"epoch": 70, "train_acc": 0.8352941176470589, "test_acc": 0.8026315789473685, "train_mse": 0.08587343003389603, "test_mse": 0.1385580102657288}, {"epoch": 80, "train_acc": 0.9058823529411765, "test_acc": 0.8421052631578947, "train_mse": 0.0716862504599823, "test_mse": 0.12217141977702987}, {"epoch": 90, "train_acc": 0.9294117647058824, "test_acc": 0.868421052631579, "train_mse": 0.062419286258428394, "test_mse": 0.11278611118679308}, {"epoch": 100, "train_acc": 0.9294117647058824, "test_acc": 0.868421052631579, "train_mse": 0.05523488436244289, "test_mse": 0.10565145053634557}, {"epoch": 110, "train_acc": 0.9352941176470588, "test_acc": 0.881578947368421, "train_mse": 0.04897583851896288, "test_mse": 0.10025900927862862}, {"epoch": 120, "train_acc": 0.9470588235294117, "test_acc": 0.8947368421052632, "train_mse": 0.04308748500391951, "test_mse": 0.0975055201557363}, {"epoch": 130, "train_acc": 0.9647058823529412, "test_acc": 0.881578947368421, "train_mse": 0.03812974460033645, "test_mse": 0.09829551695363511}, {"epoch": 140, "train_acc": 0.9647058823529412, "test_acc": 0.881578947368421, "train_mse": 0.034932401229316574, "test_mse": 0.09813710882943352}, {"epoch": 150, "train_acc": 0.9588235294117647, "test_acc": 0.8947368421052632, "train_mse": 0.03388880881906754, "test_mse": 0.10197118500643697}, {"epoch": 160, "train_acc": 0.9588235294117647, "test_acc": 0.881578947368421, "train_mse": 0.031794498911547765, "test_mse": 0.10475833984898991}, {"epoch": 170, "train_acc": 0.9705882352941176, "test_acc": 0.8552631578947368, "train_mse": 0.028435456963388697, "test_mse": 0.10444327682976473}, {"epoch": 180, "train_acc": 0.9705882352941176, "test_acc": 0.881578947368421, "train_mse": 0.025909714555027708, "test_mse": 0.10581087449861201}, {"epoch": 190, "train_acc": 0.9705882352941176, "test_acc": 0.881578947368421, "train_mse": 0.022277518780849836, "test_mse": 0.10661149290337942}, {"epoch": 200, "train_acc": 0.9764705882352941, "test_acc": 0.881578947368421, "train_mse": 0.019498050718869838, "test_mse": 0.10660400623769735}, {"epoch": 210, "train_acc": 0.9823529411764705, "test_acc": 0.881578947368421, "train_mse": 0.016783581345640702, "test_mse": 0.10598351134661471}, {"epoch": 220, "train_acc": 0.9823529411764705, "test_acc": 0.881578947368421, "train_mse": 0.014101089839228653, "test_mse": 0.10279366816025858}, {"epoch": 230, "train_acc": 0.9882352941176471, "test_acc": 0.881578947368421, "train_mse": 0.01065052030935073, "test_mse": 0.10359401860656667}, {"epoch": 240, "train_acc": 0.9882352941176471, "test_acc": 0.8947368421052632, "train_mse": 0.008487445025977652, "test_mse": 0.09553122923250856}, {"epoch": 250, "train_acc": 0.9882352941176471, "test_acc": 0.8947368421052632, "train_mse": 0.007164610764015301, "test_mse": 0.0918949754320088}, {"epoch": 260, "train_acc": 0.9941176470588236, "test_acc": 0.8947368421052632, "train_mse": 0.005534442367722423, "test_mse": 0.09013810266712237}, {"epoch": 270, "train_acc": 0.9941176470588236, "test_acc": 0.881578947368421, "train_mse": 0.004749002130521267, "test_mse": 0.08840401462453079}, {"epoch": 280, "train_acc": 0.9941176470588236, "test_acc": 0.8947368421052632, "train_mse": 0.00391613802320811, "test_mse": 0.08770753507352211}, {"epoch": 290, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0030409663988173333, "test_mse": 0.08678249772775705}, {"epoch": 300, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0022810390012018428, "test_mse": 0.08511526006229513}, {"epoch": 310, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0017625915770970427, "test_mse": 0.08365424804778168}, {"epoch": 320, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.001443627279397318, "test_mse": 0.0826241850988753}, {"epoch": 330, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0012446529186295645, "test_mse": 0.08200604595023088}, {"epoch": 340, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0011086532823072963, "test_mse": 0.0817074764018565}, {"epoch": 350, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0010071626189010166, "test_mse": 0.08159508666676728}, {"epoch": 360, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0009266525819148361, "test_mse": 0.08157985961262891}, {"epoch": 370, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0008599599296814084, "test_mse": 0.08160183076668663}, {"epoch": 380, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0008030957514960677, "test_mse": 0.08163157549023191}, {"epoch": 390, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0007536663217918784, "test_mse": 0.08165680704518255}, {"epoch": 400, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0007101132714963962, "test_mse": 0.0816735669258959}, {"epoch": 410, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0006713492449447132, "test_mse": 0.08168163405010817}, {"epoch": 420, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0006365733254302006, "test_mse": 0.08168221184394993}, {"epoch": 430, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.000605171431095622, "test_mse": 0.08167685658191197}, {"epoch": 440, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0005766588313370708, "test_mse": 0.08166704290511588}, {"epoch": 450, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0005506446479614232, "test_mse": 0.08165402624855851}, {"epoch": 460, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0005268085373387435, "test_mse": 0.08163882833598204}, {"epoch": 470, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0005048845702733793, "test_mse": 0.08162226529430935}, {"epoch": 480, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00048464963615943495, "test_mse": 0.08160498482088262}, {"epoch": 490, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00046591484716433055, "test_mse": 0.08158750028297808}, {"epoch": 500, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0004485190189622674, "test_mse": 0.08157021858258255}, {"epoch": 510, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00043232363720674193, "test_mse": 0.08155346192791035}, {"epoch": 520, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0004172089143385487, "test_mse": 0.08153748460855632}, {"epoch": 530, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0004030706625404697, "test_mse": 0.08152248594418875}, {"epoch": 540, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00038981778741212583, "test_mse": 0.08150862037909416}, {"epoch": 550, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0003773702600625041, "test_mse": 0.08149600545856732}, {"epoch": 560, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0003656574622118949, "test_mse": 0.08148472822222287}, {"epoch": 570, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00035461682510901495, "test_mse": 0.08147485039758473}, {"epoch": 580, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00034419270203656457, "test_mse": 0.08146641266871817}, {"epoch": 590, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0003343354281080591, "test_mse": 0.0814594382187909}, {"epoch": 600, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00032500053141916826, "test_mse": 0.08145393569284139}, {"epoch": 610, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0003161480674081751, "test_mse": 0.08144990169042407}, {"epoch": 620, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0003077420541985717, "test_mse": 0.08144732287205378}, {"epoch": 630, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002997499912338461, "test_mse": 0.08144617774496579}, {"epoch": 640, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002921424470225178, "test_mse": 0.08144643818027807}, {"epoch": 650, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00028489270454568896, "test_mse": 0.0814480707036428}, {"epoch": 660, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002779764550266667, "test_mse": 0.08145103759385112}, {"epoch": 670, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002713715324608151, "test_mse": 0.08145529781793719}, {"epoch": 680, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00026505768265645813, "test_mse": 0.08146080782663126}, {"epoch": 690, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002590163616220025, "test_mse": 0.08146752223024141}, {"epoch": 700, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002532305590088702, "test_mse": 0.08147539437195628}, {"epoch": 710, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002476846430291398, "test_mse": 0.08148437681302646}, {"epoch": 720, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00024236422384531553, "test_mse": 0.08149442174215618}, {"epoch": 730, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00023725603290393094, "test_mse": 0.08150548131967143}, {"epoch": 740, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00023234781607548886, "test_mse": 0.08151750796552482}, {"epoch": 750, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00022762823878668564, "test_mse": 0.08153045459893257}, {"epoch": 760, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002230868015998025, "test_mse": 0.08154427483635683}, {"epoch": 770, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00021871376491869063, "test_mse": 0.08155892315362559}, {"epoch": 780, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00021450008168896772, "test_mse": 0.08157435501719223}, {"epoch": 790, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00021043733711843455, "test_mse": 0.08159052698886085}, {"epoch": 800, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0002065176945773971, "test_mse": 0.08160739680772106}, {"epoch": 810, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00020273384695196643, "test_mse": 0.0816249234525352}, {"epoch": 820, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0001990789728196417, "test_mse": 0.08164306718738865}, {"epoch": 830, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00019554669689871162, "test_mse": 0.08166178959304124}, {"epoch": 840, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00019213105429319408, "test_mse": 0.08168105358609379}, {"epoch": 850, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0001888264581153465, "test_mse": 0.08170082342780571}, {"epoch": 860, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00018562767011956978, "test_mse": 0.0817210647241554}, {"epoch": 870, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00018252977402624312, "test_mse": 0.08174174441852709}, {"epoch": 880, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0001795281512526667, "test_mse": 0.08176283077822279}, {"epoch": 890, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0001766184588017424, "test_mse": 0.08178429337583869}, {"epoch": 900, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00017379660908814433, "test_mse": 0.08180610306641099}, {"epoch": 910, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00017105875150702588, "test_mse": 0.08182823196110832}, {"epoch": 920, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00016840125557239478, "test_mse": 0.08185065339815101}, {"epoch": 930, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.000165820695471616, "test_mse": 0.08187334191153772}, {"epoch": 940, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0001633138358994149, "test_mse": 0.08189627319808812}, {"epoch": 950, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00016087761904958045, "test_mse": 0.08191942408323065}, {"epoch": 960, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00015850915265565424, "test_mse": 0.08194277248591442}, {"epoch": 970, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00015620569898338444, "test_mse": 0.0819662973829606}, {"epoch": 980, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00015396466468786546, "test_mse": 0.08198997877312997}, {"epoch": 990, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.0001517835914572815, "test_mse": 0.08201379764113703}, {"epoch": 1000, "train_acc": 1.0, "test_acc": 0.9078947368421053, "train_mse": 0.00014966014737310076, "test_mse": 0.0820377359218099}], "cm": {"tp": 13, "fp": 3, "fn": 4, "tn": 56}, "wrong": [{"file": "gestures/B/B_down_2.pgm", "p": 0.0034124573799136867, "label": 1, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAByElEQVR4nE2Ty44kNRBFz4l0Z3VNqwUbEEizme/h/zcsEWwQs5iHamoq03FZZFWD5UVItsP3Ff6GKpTQe3ent++/30x3J7wOwLetGv6/5hBRLKGKVNRSxJhRCOkkIEeTqkAwhFEgISEmQBQKSQB6AEe1JPunK4X75qDognka0Aec5q+vCMm8Pp9QIGQc7wkf/76d6URdr0NDIIyDlvn4RypCes69FW0kI3chvtXm9hTs7NsyYaG1GREBXv5Z7CXpzO6amv6Phdp/zjga2LfZO6ERwzhEBpJpnebcVurLjVAFZNTBol62VFHXnD/sl0ubvkHVOu6mXL4IM9/JexNCkmSyjhAJT26Gy7qu6yFABwhWYkLXr5Wu51d+2DuHwQCMMY+qPz3PhLmu0374g6mxH6J7+tx442e7m7ojCxnTI3I/vd68fn46U+lS2yMSdxZS53Pvz08VoqVaScwgWqiJXevSfXRUDGRQtZQoyVanBfpxAeTb0GWUiunwbri/5VrIbYwawzqyW5yhfWNA6FHjabkT8d1lnZkl8GiTWqpERfnlR++zk+QYJkctUiLiy3mSh/2PDsf33if0OFfJXe3BHSEYBA6zHyD8F4C4EtytqBBcAAAAAElFTkSuQmCC"}, {"file": "gestures/D/D_down_1.pgm", "p": 0.3444520284408466, "label": 1, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABz0lEQVR4nDWTwY4cRRBEX2RlszMYbHFYYwnxL/7/H7GE1sLY4J3p7orgUOPMY4ZCGa+y9BEkqaokfMYkxEmcOY9bCwRxDDlTgyRUjCijJgKAwOf7ZVx+EjKAIkFLrAZea9N5jq0qromCVPyYiy+17bZ82yOpJCAteJjcv13HPIakOUUlDqgRD4nPcyMYqnwOzwRtLQmg2D9LZ2Qp50A9RTLc+uGw6+2YK42mcjwGXREIOcc2BsYSZAkit0QQ+fTffUgJIAmHgiT9iDlf66liAhGCxAmhHxj6zb/9dEQSPoVCCDgNy+PDy9dDQyjONHGWqvHiNH5/+9e+jZIqt/HrpeY5j/t+tlMrhn75+eXv1Dj3+5s/ikxP77fvnZCFm/5w/+fCcT7/pgRFAbVxBQTEx0VH/XmNrYSQ0F5LWgov17xen0fiJCQBOliuKPDFdX//9MiPkwS1RWKQzt378+aQ2JCFqgNOgbjx/X07BjsB2446YBGhOd9tMwlOYsV2UIeoEinaro6XwI8llFZEokRdJqu8BCZq1t0LqgKKyWJgknJDqUpIgRBXAMvLi378unXjJIrX866ktEapSkIselFN40QhSY9RpRJaAhMZSYtT8j+vyIsy3ySixQAAAABJRU5ErkJggg=="}, {"file": "gestures/D/D_down_2.pgm", "p": 0.014466654292609184, "label": 1, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABw0lEQVR4nDWSwW4cNxBEX3F6ZUuynMQwEMB/4///FQexEwVa7Qz75cDZCw/F4uuuZud7SCKS1CXHMVtVm3Z61IAkJkIgSQAghsgYI4ERSBAgJCFjhJGxAKfe3SQEGHdrETthAdokidqB0QkVFNazs4TEAJJQLv2sIhIwS5QU3GMQ4/tMbaNXCpPUAp0EX/++PB61ZUBiCMXZ4PLc5mMxD2rLEqn7WIC43x6225bBMQOqy+Ad8OP2aXSPBuxj624rSZ9DkTn3C3aQ0aMOYo20KwP5tVftDjdw4mFiJSYRSL/W00Ov0qIzQGFOPrDvY7MVgy2BOtMY5l9v19paRcF1VBguyttrfSyniT1xlaKI565cxrFVZhJwzk6LVNQ1hw9ff932sSXD4bV+++BxHLc6WwLy8nz9921uw97fn74Ne/bcq9X0kJDt+ent52vV8f7854qFw+5u+74sT49Hz/n7t7FahJqNo+PABL29cPv8h92sp9WtZow5YvCffLx+ebSXQa2p6TVqwvttu35+sO0W7bZsOuPc01zHfy/bhLbVtrts7+tHPPbLpQXblu7ZJYBmAI15Xt9pu7qsdU3EyFaoCyDd7f9AOHdWdOm8KgAAAABJRU5ErkJggg=="}, {"file": "gestures/E/E_up_2.pgm", "p": 0.9752259447362074, "label": 0, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABz0lEQVR4nE2TwZITMQxEX8ueJEA4cOc7+P8fomCZZFPJjLs5eJbCVT7Yklyt17J+VAnFKoTCe1uwM5dxIRAgCVB+r0IgqaSSOgAzSwiP1yjKQASopCpVNSIktTbuVRKaW0VmfTzPPbfxEQZU4CSocEB1SW4qCVGSKEJCAgHguvO+IU3RqCQS20dGTl+GVpA4NIh/9TFB36zXDY44NdsMgiQkl2XU/Z2PRup4ighiJ/X5udc6Dnz0A9CE5dt9nPDo9bgqAJPkQRv/vHv87h31x7mLkEODJurbqt5UHVOrp7r61zDwyODch0lq3EGQaVYkpXR5k/VKq7jqee5JUkAC1Zferwxv27Z7jBHuAdFFjmlQ1rO0L+u2FMj721VJz0cLQpupVhpblQmP1+WcUvjQyact8ZZi2CbZ778eFQ6XIGMhGarOa3cEyaMrEJJEbA0qaQvDkZY49MPLxNKXX4nT+kIzsVs5ReJkeNi+nsflRHVQ7+WxDaknjiRXYN9PSk6aHmTQXD3xMeFFu6wvLTGJskWM5j7lVSw3fb8983y+QMT7qbK3PucsLpelr1+JX8/WyXh/Gw33kMkhyfHLTkscc+n3tamTiSkGlcJ/F5f64784DFZrCrL7pQAAAABJRU5ErkJggg=="}, {"file": "gestures/G/G_up_2.pgm", "p": 0.6794921280140698, "label": 0, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABsElEQVR4nE2SQXLcQAwDG9RYKsd2cs9b8v/nuMqV9WolDYkcRrIzVwJkg0P9kUC2DDZU2s7ej/fPAtEECISMAAmMkA2YAOOhkSRb6BTZQIDQKErq751AijgdhCSdrYX2I4UQXy9OBAEG1+7LAiAC6bJLRPTjhAaEiUs8XA0f1iiBgaZLKwvN066nWRoYAgXmSi6p/SQfBwHWBTkiaMzV26tzSyQZAMcYcIKK+BWZxxUB1L4TYz/Wba3FmWCP4U3fiep9r4encJ/iK+vVwUD6OfVwBfvs/zd5QtjKakFW5X65HGcrg+6PpHAZ5zkXNaMR2etNR9ZDDcgWA9JNGAvDyo+i54GxM966OTucOPPaSxkuUj54Xta/e7mBZRl46hnOHk4paeVl6fd7s7CMxVbzE2ZrQaUqBO3tNTDYxnQtE5UKynaN/xtHO672Rdu6rXdNCFRphNUMyMhalo9pnveosrFKgnAzKg2O+CVWyMJZU6uQ7fa1dFg+fT+ana7DRJRkLoEsXj5uGdmLeZk2ekxh1AwqBbKm35si95ijr7d7Wgg3MzbtsKbXCO3pwopbLBGhf/9xHrtWyLR3AAAAAElFTkSuQmCC"}, {"file": "gestures/I/I_up_3.pgm", "p": 0.9453511708732744, "label": 0, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACIUlEQVR4nEWTzY4cNwyEi5S6NX9rryebGDASA4YPfg3nlJfLEwa5LBDE+XNiz65ne7olfj6od0PpQAgkq1gU7b1JZpJLhkwytJr9+NP5Zxcy0Z/NZC6JNQZkLpNkhiQk+TdJdFdCwp9cAWh/ZQH0IoBlw2QyCZOkNNjkKSHDAMl7Pisy5F2rEaiXCfkKDpIRUcdjrm1FiUAuCfuf05ye75caBN3kPHqIIEiHIzUC+pV3Bv0IzUs5blpbswJ8ZdjjTHVKL66jRS+5QugxHRRTLTeptiAgonfBqgwCovqLQ22BiIjAV1lBuJmu9sqHG6sRAa0FGXURzW7y0uJVXoby7V+nZOaqrfUAQ6bXPyyX2VPUJT17OVd3iFrxlV5sju1yN8fnZVlUvnupGkGtjRwmDJMmf7iv0+YQDeXv699N3mqNvH4W7u+22/rvuFdbrPn1u/GfWVE7B0ywvdm0/9ogVVOkctjffrhblkbG+pRs8nlhembNPLbD6G+3t/FgkYVkQl9+e3MoiTQkN6Wc2L4qy8dNyxiGRN3u/XynVKCW0TDb6cuHcs6Pk4p2zx+n/NphGD2kFMXOp0NelZZ+v77a5ecHEZqKZbmnYcfbvK4E2DBHvZoWo0rJUrgnSsv0fZL8/vzn8eHjnC55VEkSjg8l05cNHm41Xn79VPwS41KODu6Z4alNtRNtniuJ0KlssoPMh4wJDBQCywkBp19G33lIbl8B77638pd55KAAAAAASUVORK5CYII="}, {"file": "gestures/J/J_down_6.pgm", "p": 0.012397003333921493, "label": 1, "img": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAB7UlEQVR4nE2TyY4bMQxEHym2l9mSc5JJzjnn/z/IyOJZvHS3JVYOajsRQEgACRWLVbQfABiAyZCBTMASzn/HhPULeloKgYHslsZ6zoQwxbXetLzWz2W/nzsEUqCOC8IQ9rQtq8eX47jgBHSA/onycduybON+2p8R6gU34Kybhye1lIaI6TQ21ZDRiRlSrQPNzDAo6+HDoY0BMhMyoVZXpYiUpMwL2TbuyHqfklKb1ZNjYG6YWdTZhQQmoWxmdimOu3fkVPM+r5SULV1za46QO5Jn8ZB1klKmVuVuXchMpKwofQh0VUJiMJdl8UtrdaoJTQEIE1KmYW1jtRq0mk3NxksXS0IiCTH5DLSsl9pqGefQTdjUverbuCnuZJ2nNk8P4xhXa6QSplpjtY6hUOepHk/lrUUuMkhq57Uup2EY7jZc5vl9X+PlxkJIOoxcDvo6pTGOh98juzaFri1gruNc0+rdRz9Np7dWhCu6Tr1gyLTcfC7b9/H8lispM6NPqIeFPL9/acfz+x/cQC3j2kK3HPbwbXUcX/90u5vljeZ1Dz5tD4fdT/NlQzx03YJu8+H5vN/tgu4C4J9YhmG+WU+/dji5cGfRwkAS5j6NewyKJCEUyNIQQjKHc6suwJHSM72npOWDfF09dk96iYgofwHrxIqqM5YamgAAAABJRU5ErkJggg=="}], "seconds": 51.96648073196411, "grid": {"A_down": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAA60lEQVR4nIWR0XLDIAwE9zDuU///Yxuj7QNJajupoxmGAS0n6YAPkdMxgjPhG6CvDKKmhTEQ+uH99yYQmqGqAR6ApaQJaFEESdsDzSQAakEIHoCvlgR9NAiwB1pXisRH63pQyCCzhnN5UugdqwBELNXDmEumVYpTQLIDkq0hqjK3ZK/gyJJ7iRRDMMcpljbuebM5x9gBfXUUkgTrnQ/ljZrf18bz2S7/00bZVgjbX+t7o1KQdc0Yt6fX+xIWYPVQ7//icXO38z+gfwRqbFwAS2rzCui1Da6B4SWQcRB4AeJR4AU4519jyQfgHL8q7ZEAbasjqQAAAABJRU5ErkJggg==", "A_up": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABBklEQVR4nI2RQZLcMAwD0aRsz/7/tRmbRA6p8mhVGyc6qaQmAZC89HziH///AbA8sJSEVyC/l6wSjBVYJcaxPUrkcfSzxJeeAeWaYvHgNefqoZXjWaLi4G8AkGkfOQNTvxSKDPK4fgSItGIP2PAPADk2OV7AyKnFHdNjYFVZkbPNT8wNqfttwT4Dt4RsueuSyPGZ3+dWdhudRtrifr9NmoyuVguUe/XlNaYk1FVYMcblkiWN2+SZJUt0YwWhs2Rp3EN578qoktohmyEueepgRIuw3fyZPFd72sWvvSAyJEC2EFUTcEaE5ctdA0mQMG+zXVb0aVcdacsQY0ybe6fhjdXwSkMR12+WU3jsCGGi+AAAAABJRU5ErkJggg==", "A_hold": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAA4UlEQVR4nN3SW24EMQhE0VuAe5T9LzbzsKn8JFJ3z2MB4Q9xVJIN8B9K584fgLZ0e/ZbML4aptfap9SBu5zOnjuyB48KN2nFfPgVQOmHJCjd/0Ts5+XV93uEIi96BdQa23Imiks+g55VmZ6SQJehM+DqZcdtGiHGFmfglHLz3VgpclTo8IqesEx3CKQm5UMC3zSKsiWkCEUcf3Kl6Iy0ZaPspWOCb21vqZTBVuRpF1wzKyT8u/k43QNASAMijYX9DABEbmXk80Xtg0aFjN4CiFHS+wSArPqUAKjq45zTrl7WD/MxXcGgeV2wAAAAAElFTkSuQmCC", "A_stop": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABD0lEQVR4nJWTwW7EIAxE3xiSrNqq//+tG+LZQ9IoZNlDfUGGpzGMDfw7vh5dWt+AAChs1/QSZVEAy8wHYKmBUPgTEEggaQgUCBSijBWWb6kEErNO4PqKIkEINDFUkCQLiPD4khGqYbkWb2Og4ExT7RwBpqZsR6Wdm9dLtjLRIvJXeVboFDIUCsCZYyDzJwCcBtBc+xJ2tYzl4zx874V2USmAWtzemiUbEVFAle2m4FRaOBRTMBW3u1GbgkRAfdRJ6TuwgklsXGZ2MzqgSQJjkA63uqFthDdsMGTzm8K27u8g7aNCD/i5O5FO57rb3f+L9RhXk+3oV2/UM5FEpvOv4T2Q677KzUOAZ1rZ8HpOzAtWSIKlV8WFLgAAAABJRU5ErkJggg==", "D_down": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABz0lEQVR4nDWTwY4cRRBEX2RlszMYbHFYYwnxL/7/H7GE1sLY4J3p7orgUOPMY4ZCGa+y9BEkqaokfMYkxEmcOY9bCwRxDDlTgyRUjCijJgKAwOf7ZVx+EjKAIkFLrAZea9N5jq0qromCVPyYiy+17bZ82yOpJCAteJjcv13HPIakOUUlDqgRD4nPcyMYqnwOzwRtLQmg2D9LZ2Qp50A9RTLc+uGw6+2YK42mcjwGXREIOcc2BsYSZAkit0QQ+fTffUgJIAmHgiT9iDlf66liAhGCxAmhHxj6zb/9dEQSPoVCCDgNy+PDy9dDQyjONHGWqvHiNH5/+9e+jZIqt/HrpeY5j/t+tlMrhn75+eXv1Dj3+5s/ikxP77fvnZCFm/5w/+fCcT7/pgRFAbVxBQTEx0VH/XmNrYSQ0F5LWgov17xen0fiJCQBOliuKPDFdX//9MiPkwS1RWKQzt378+aQ2JCFqgNOgbjx/X07BjsB2446YBGhOd9tMwlOYsV2UIeoEinaro6XwI8llFZEokRdJqu8BCZq1t0LqgKKyWJgknJDqUpIgRBXAMvLi378unXjJIrX866ktEapSkIselFN40QhSY9RpRJaAhMZSYtT8j+vyIsy3ySixQAAAABJRU5ErkJggg==", "D_up": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABxElEQVR4nD2SQW5bMRBDH0eKnSatUaDIgXr/s2SRNqi//5fILmRHK4mUODMU9Tuo1BRRkjiOBIITx3GBpFKCkCQJCda+UC2MIKqqqu3XhYBA6khEKOtMXQEUAUIpluSXKrsnjzJACRE7BJCqWnahYnWjAimxgQio1zmmHnJSAUsvyIa6oP2LFh2hCAmXmEo/DWbPwqO+OhRAPvZhc30637oIKFItewDY3+d+zVZxrIdt9eADqs1juOG2S7WE6047pP3a/LTNocnMvU2qHlei/Dtv2m/2HAwoWIaUwAF8PL+MOmZyMNbfQVcBIaDGrfPturXuY55LEKhCgUcG9tv1m4JnbjZJXBDPmSRwotX2UV2t9eOIE6cnmdNWEv340/rZp95aL24iSSoeY06bkHbmGBVUUlgSPXPagcS9v90+9zGrLKUOmHZPCEKE6Hy+5O+fbZ6TRh0VuyMgK3GgtJ+Xz/ej1FRzYhdrac0RoXZ5w4rVxrSL+1tIgiDh9WWEGE27VFLVIrKiDhcGoJ7pRasEcXIveHoeU1DNsyS13rRcce7jfPdwoHd31IziJLESKSGn06061NPea8WTGCshJAmv26iG2uk/z5RMR3VeCIIAAAAASUVORK5CYII=", "D_hold": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABv0lEQVR4nDWTQXIkNwwEM0G2pJHXjrAj7Js/4v+/x5ddWTPqJsoHzvLGKCCDVQD9h+DQJIgIgV6rO+n0BEN8yhARqlUQJ0YJEgExGqufBQVCYhAAI5SqAhRbCaDsLnCUYul8cnf/E4tYrUErbPIW0/tCWao4f4oak/OzXl+JMNJK9XziBbk+v3y534930ZEIP0EA5ONx1em4vodYClj7bSJ6Ms/vH1+Te3h6ZaIQjfDy77Gur8xxP4ZEwartM0L8pccx+mL8R5CqslBrv6K5/f7mWr3GeiQRdW5tx3TNeTvqfs2uxwEYmIgEIGet03Wk+6petdPfdEVdNW85v0rW4uuZTm2jGBiPXvNl5nVIXUGBkudc4XD1+Zlj1pDxABIm9h52ZA7j9TZGAtchhkkgCei47osxD6yQut/2wpDu7oTw66Pn20uSAPYCqfQ+Cdz+rMp5rXMlYTwgzKSTkErg21g/Hozj9XVVda8iM91PZMR3vn1+/MjRBTXu77E6SSfQhIDvf/1d3VpOTlNsQJKVvZ85/jg7EsYjKdidgU2CvI+z9yc42UGTJIRsi/72dXaM45FnAbu/s1m3ca1YVj3+B4JEKOSukWqlAAAAAElFTkSuQmCC", "D_stop": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAABm0lEQVR4nE2SwY7UQAxEX7k7k2VX4sKBD+L/vwSEhFaLhqTt4uDMQEutKO2yXa6yvoEVCv78PLb1+kJhlzOP8/4jy2FQKMTx25kJkiRkA8CUGuGUkRzQoGhAGCQk1RgDhOgXEIapjpMlha54SSADBAiJ9X1tiqGuJgkQ4AALxbm8CZf1xDSkSYoFI0Y98roVoMASxp0YPD401rPxVhDwf4WryJO4XFbr1MMaA0wkZFlVN/ahR4VLSCaPozHvW0iiTuv5Gj2OvWZRglS9fywkbLdQCJQeLjvLfr/bLYKN4yJbIRw2x/0DvQRgEJptDRWCKJ2/Ruo2CqAwDl+KyAOKrCP0gk1fTSSAWQOjZNbcZgncafHwxAjLHvv2Jsy1Ub500GZEyWObbGC7L4Ekw2bkNFZWYJfdw4bdLWJV2ti6yX3wZRYW2s9lXGl2/oVR2FiG17WKLKyJK6sK42vlLNjHUXKaeHbAag4WIt6O07lWZj0ZyOgyy/D5ljk5koNnhctNQGj7Opb31z2OdDVF6QL076cvLM0hnWXXY6P+ArqmInPanvvNAAAAAElFTkSuQmCC", "H_down": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACNElEQVR4nC2SS28WRxRET917u2cMdsAiAsQqyiq/Of8rUnaRWCEIEAP+HjPTXVmYdUlH9dKfgsBCgMAw50j7/O/Hr9ukQEDIskCWsX39+PXzBs2uQAJ4QlzPR9Xl8fsnyYnwLCSB5euDv3/ZYIoOkc2eDEoSYfjydyjVh2IE7m4+DuYxCwkk/rqTR9DmjgdweIw5nCUcRvtnr2KiEUmM0LEdxuwlZJiX8IzpBaXEGB5jTI3dBQBqeZt7Ns2GgG2zxH7dR/3sZzvSRUw58XG+TOZx3g5URrJ8erxGWJVzzOO8N4/rt9EXj7KM50wfz4iFfczLNnSZj+d1YR5RlpnjiJdrtu2k4HT15MO8fWU7cxYWzPHlcvZ+pPbLDsvXX10gRWRJwp6PD6c3L/vYXeWxZUmRWa31p5j28vDCOh0tkp3HtSKr97W1VoAR/72ul2QaH9ct1qq+LEvPzJIQbO/ndmoQOc+MX563pd/0lmHV01axjfzQa221UfO+r33tmbIpCUP/7Z9+M8bp2ta76+u7Ze2tBHP4J0F/vD1f5vT75XnW/c3aWoU9kUthS9JyDeS79I+3z5abygDLMerpi4BC3td2vHi3Lj0Dg+QoIGaEIKaO2xG/L72XBFhhCgeR1febmGMs25ul9RboiRBVAqWQsh8/vI1X1SrByBhcyCFFRtT+oG+vKysBmACmsEQ4gOzoXbV8ci0DUjzVEFHV+m2221apn7KnISwhJIh2z31VCjynbbD5H5kxRUE6wo+IAAAAAElFTkSuQmCC", "H_up": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACIUlEQVR4nE2SzY4cRRCEv8iqnt+1WQEHc1hpb1x4NJ4WS2DJAhtxQFj2rL07O3R1d2Vw6LFEKvMWFRGZFfr5lSSQhEC2HWnbTmz3uhesCISMLBCAwCK2ighpbd4+Rwm0Vl+CqItWdiE0f7p5IZQAUAIcoyIkrdN0AqFrSyiOVzkkyf181ldISFy1+Qq/6bs///deQGRIUokQon4fl6e8cq4sYQHGRoL78+F9et13JYlFSLINyPthmf8AiHVTFKu7CBn6fBmm7elsibj6qB0s4fk97ZRkOW4/3lggy0h1vTG8+RyOQWVxPd0FImVhIlcNnue5twahTT4ICAAUq3t0H/53zKcZ6/h34usXUhEGKKVPbdJGfRoev9wGRsLEP8aZmZ+G2/u7naa2LK6/J5YAiLDTtvdtbJ4u89SXked3iY0wccTKhFdDXkaOZZ6zs318OwFg4kEYwSU233z7nQ+75q4tl1+ebBxE8xqtQ3ZPj8PuuJF6d+brz1gQliRMfdnGki9q3Q0RkO6/fjQoUiEJqde65L5sCirbkJW//ZV2bIVKhHQ3cDp46kjVsqR49yZdZyEH8u1P4w8fHlxLhDRXSi71w/Rj3UsWQlFKfenzNLKUXWmVUJbT6yhICgERdRh2x/1m5zmYwwXiS12uIYYYbA9Ta8umt8M8l6xL1uo1WEYoomzb1KZpnp4HL5HVWdOs8SJ6LXWzn9vUWruMtTh6lP8AoQMt1iFWgn0AAAAASUVORK5CYII=", "H_hold": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACM0lEQVR4nEWTy24dZRCEv+r/nzkzPpckYCsSbJDgEXhUnopFgAUEZClgKZYIYDv43D0zXSzGKFJvutXV3VWl1ndCiKQIZCAFaWcCmSFFCBQCIUnyaAUBAlVJAslCgGVAWJYQY9UMkj7VQzIQBlyDsAQCdP5l+OYlSFgoMVElIiUE8s2/8Xb19cXzGsBUIeL/bPDW++O3AbIclp9ZCAAP237zanm8BimYr57BAtv+6TYWkfHnBwhBQNQ6Y42Vw4N+a1vW6+v2FSgBOwQ4nTmO99PVV8s/7obS34AUkqAiDAb2v1+e297Xnw3tPmfixiFmfeGfaewPw+pyozLm7ItEgNPGOt87YnW4pTbKJzBYivC8QL7pKvbu4aJWlb1RIFvxzJI8PK3KYeBLhOoW2/Csg5A8tUf6vC1F4LIDQFIE84QcNx/ef9xfvW415TjtjOeIudXTWL7QXy+uFuvwlOM+cxbQVZYhM3Ppz7v06jBOnsa7S0zaDkBCqNTp7lSa7gXTVOu7wRhwIAmp1mbRHe4PlZfraGsz/WqnnY4ISYrStF2/2D4cyaUmi7/fWSSuYaUImhz787Bjo9SoYt0sr8COiAihKE3b911sH89jaUsB/Xxv5JifAaK0Xd83sT/un+xSZf3w4FSAQpJU2m657Jp8fDqdzoMaqG8+ziwISSjai81m0ZSxEqchGlN+3GXYs+9S1MXFZrMIH2ttTmqaDL851Yz5C4yiLgAdhsd1o6EtJcv5+/8AjSYw1ET38hYAAAAASUVORK5CYII=", "H_stop": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACHUlEQVR4nD2Ty44cRRBFz72ZWdUe9xgLsUAs+W9+gv+whHh4hQwbC5vFMDQzPd1VWXlZVEPuQkop4pwboe/SpCBQcj4SMRgKDMb4/p1VZMmWpY8/PT2ESGJ/WWVbli1Jv/2qD798QkLsX7aOXS1LCJ7SH/Uo0F4HbbJlJBTS5mUef297gyBRFixkBKSPMpc+PaPbEFE2bEuCET48vloY5UFCQrKlriorSsi4kNL79WlYwQTIGksYERL1Uto0BQgIa+u4SBIy1GmrerUtI1iJBLlieUd2yp0Oi9b1sYv+87sBZqeQJNGzUfV6mh4q2w/Px0LYllhCkoGDaF+2aX5a+eO8fBsJ6s2SZGsudZqbt+Of2yfdT2wwyrDt3b3ry5s6xrjq4XrK10C0JgbJt3Qa6UPJ+9lveoq0CgNCslxGadNhlDH1u6lv2cgqedcguTRntHgsvbWuIhgrGBQBqHiUQl5SX19aKSa5wA1TyG4r4TqmmX++aUbiCnuLXdb8kq2vk3M93BWC04NvqwHS8fkyRil9efrKFhYrqQrcSJqfD547l/VQBFBWqFH26OVyf4K2nf/6wlWQjEvwf6RWKff9uix1lOtclYzRF2Ii7bLtdjyv55Pv+qkAY/Qle5o7RKn1uJ7GVkr9vSNEXcFhvwPk2trbSt9KHe8DaCwjRv9PUadpPjRfXMvnzyPS6OAgIUtybYe5xllamX48k84S/gWgdxuZH4LQ4wAAAABJRU5ErkJggg==", "K_down": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAB40lEQVR4nE2TwY4cNwxEX1Hq8Yx3sTG8hvMr/v9PySVAgEWwWKdnpltk5aAe2AeJgESWilWUfggAjmAZsDAGqwLbAIbf4jyDUgDyrNfMmXc2NnIcWOgominHbtMnrrBsmbho0e02DLKMOxhhZDDn56ckvub1fl0LDP0AkBFF+9pzo/eT6vb+8790dqOjOXuXM1rjtlTrp5fP2zqyg3Wwy9R5cVaOe2Rj7LWodx7cbev5HFS4VW7O3CuaupE1lXPef7504ZKV42Z5o08CE2H/tF+bs3Lfve97LeyaOggK3NvreZisXO9UeaSz84CwLeddI7daP/YwjIF7iWmgzTb++vZZxX4dPd8dVmkqOfV2UdnsLS9t++dfRywtOqWHM5wvly91u6nBWMOVW6j7NwPvnNlrsev60U+ukeluebK07fc9o0ZwY18kXCO758QAqO1vbwv61C5LNXAo3CfH2Whc1u1e9fr0x0cEdoG69RhHW8tlqdpfLnmNFq6qqm6sR5uoUdW+6/166lJVVnaMp+NhpBh+etrWCAUhOfocOAAJu1TPWq8hAWqeSqJjGYnX9c0zATjcPL6EUMSidY3QFFd0g7B1wMx3ehzPFjElxNPxsrn9eQqwXQZ3/7JzDqf+HhJ+fMT/ARXrjTDk+Hn2AAAAAElFTkSuQmCC", "K_up": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACJklEQVR4nDVTW5ITMQzstuWZTDIbwvIoCk7ABTgHx+YS/PEoClhIssxkxraaD89+Wla31GqJHwCAUBABvOm/lRYAgPjx/dkAQAAEoTKklClCDSUhACABAqq5lO4ANTgBbAlPD1e+zsckAdpopZYAQhCQf593zyGJEiR5YxCErZUb+GoPwRuDPzG0JkiUSz28NYgABbgQ1NAACAZd13q8ByQIUnWF1pC2DM659Pc7AZKgKhhEgYAAS9bvnfHw4psDoCiXASJECYdTt8t9P9jw/HJuulwKrYDcbUihWrcLCMN9bCVcMlGEVGsqOd7mMZKO8XAGALrLIIgqtVxTv6yPuasDMoaLg/IqN0CQvNa0C3m++RIC60o5RZTq1gQLOo77vjxcal5CWfH6YQoB1WVqNomlZPfsGZ7gth///M5Wq9umQv5TJ6vnu1ohKfZ4ffj7cF1l2z98fDEOpMbbfEwrGSO78cend9a2iUCfCNGGrsaQUNwMsC+frYmQcL1wnaeXKcm4LvCcDAyzNQ2Arh1Po3UpQJJ7iIXBNNjmNsnxztbVA1GmqfZSlCvSmrEQ+CvKdfrHfL0+hvs7uKEUawwSifM0HA/fH/M0L92R3CVGU9lGDYQYbvPj3bxIta7Tmo/7XQoBpu1saIhVF0YCyvnX9Oq0H7qIbZIQQItOUXB2zNPX27P9fme2bRxBuiIAORwG5R/LcRl6gwSCT5cGgEFQ7Fgelrz0/wGpupB/g6CemAAAAABJRU5ErkJggg==", "K_hold": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAACEklEQVR4nFWTW2/TQBCFz8yOr7k0l4a2FFSB+A/8/78BLyBVQiJtouZC4tg7h4e1g7AfPNqd3fnOmbF8FUAouD4UgCkUAgoSDqZFghCSAkAgBGHAsAsKKCkC4EpAoBgWwPSRoZIDQJ8wIIhceQQCEFQCEAo5MA6EBAlCr8QAQBLh/0TrEa4669vTtsM/3dbTp0KWx8kkq9dHuCRHYOydERAcFzW6w+jD5oXsxWkqDRDsOpkti7dDI4vZVbul+wVkjHzt8uP+HCqMtt5nGIjkqXd+lz+3mbxO78ZaHiEACEsETkSGmX7eH87VY2Xl/NCrUDDJd3o8l8tPX6Sos6yY5O4kAU3bQjq63yfT8mlm6MRGTEcTJEmIT5/aX7Vs/RIsaC0uSD5gqDKvy/z1+ee7k7Z6QWgFFJgMGc5zh7jQde0d0UWhixDmSaWTftwV2pznuXrsYksClH6iSBCsbY12M6nsYrx0dUMI00wyNaQePXzk7mb1Nm4C85txkpkAnU7fNc0+zm/GD36vZVWtAJLGnpLkrs3z02walo3c7mhhsQ6pF+mFn0QOs8eMGB09D6KrjSvMISBJAOd6Xi6mHtHCM6pV73+Y9lYTEJVtq6fN/sI2niiuNh130ZiaDUJD860cLYpVxiZaCAh2/53WTzwJhKw5bl5sY+M4zQPcimr+YmD6V8QJLaz9Eze6XOQjhTLPVvu/Xqhaa+L8DjMAAAAASUVORK5CYII=", "K_stop": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAB9klEQVR4nEWSzW5bRxSDP86d0b2qZcWJaxjprq/RRR8nD91VF0kQJwiQ1pUtaWYOu7gjZTU/IAmS5+gPCwRgYYx+qWewAOnXD8kyGAZKyr/dp/HAIskwEADazUr3tzYghNLK14B4fr8Pv9lJg+W08m0Bdiv92M6eIhjCmas/iGjF3qjG6tIS2YBkWcZlzi1tJmMnkMCZYUBg3i/i1L2EYhWW08WMjbVtJfkca8bVd/Ll5mhFJ3vZqgXYgOWMIVnGERu6vCx5YWqX9EPB2PauzHN265ul2KOYhI3XKlyqqb29rr5XUloPY6w5934oqfbxAawe1hSedurp7l3//abaYBkiX2u0y3S62+5JjzBjYdnOP4flhc39qfeUukskc1EYEvZ+Iai91F6FLQORPUYdZq84NYM4ecR05LFMdjBFry5dmz7fTDYoq2YwWkM1crLnqanslxc7P7zd/pUNMjjsmJRCucua7w7sH3fL8VO+hMQ+tmKySVNw+3D3qNf//n24FhX0lzqZHpPJ3t/ufPz2tP0zj3227cOpWE0opbTU9vrpY99NY6tt7MOx4tYQ3fTD57/PiHxpBHh9uZnS5CB6Pf3z9WtXb21UjcPU57cF3Fpt7fnzd2S5Xz1g4sejRI9j9fnLk1MSXAEYeD4Q3cee6venPslC/h/kI4MZ345tQAAAAABJRU5ErkJggg=="}};
+const pct = v => (v * 100).toFixed(1) + "%";
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const last = D.hist[D.hist.length - 1];
+const baseline = 1 - D.pos_test / D.n_test;
+document.getElementById("s-acc").textContent = pct(last.test_acc);
+document.getElementById("s-base").textContent = pct(baseline);
+document.getElementById("ntest").textContent = D.n_test;
+document.getElementById("npresent").textContent = D.n_train + D.n_test;
+document.getElementById("nmissing").textContent = 21;
+
+// hero pixel grid
+(() => {
+  const cv = document.getElementById("pix"), ctx = cv.getContext("2d"), cap = document.getElementById("pixcap");
+  const img = new Image(), S = 10; let px = null, hover = null;
+  const draw = () => {
+    if (!px) return;
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 30; x++) {
+      const v = px[y * 30 + x]; ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect(x * S, y * S, S, S);
+    }
+    ctx.strokeStyle = "rgba(128,128,128,.28)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 0; x <= 30; x++) { ctx.moveTo(x * S + .5, 0); ctx.lineTo(x * S + .5, 320); }
+    for (let y = 0; y <= 32; y++) { ctx.moveTo(0, y * S + .5); ctx.lineTo(300, y * S + .5); }
+    ctx.stroke();
+    if (hover) { ctx.strokeStyle = css("--down"); ctx.lineWidth = 3; ctx.strokeRect(hover[0] * S + 1.5, hover[1] * S + 1.5, S - 3, S - 3); }
+  };
+  img.onload = () => {
+    const t = document.createElement("canvas"); t.width = 30; t.height = 32;
+    const tc = t.getContext("2d"); tc.drawImage(img, 0, 0);
+    const d = tc.getImageData(0, 0, 30, 32).data; px = [];
+    for (let i = 0; i < d.length; i += 4) px.push(d[i]);
+    draw();
+  };
+  img.src = D.grid["H_down"];
+  const pick = e => {
+    const r = cv.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * 30), y = Math.floor((e.clientY - r.top) / r.height * 32);
+    if (x < 0 || y < 0 || x > 29 || y > 31 || !px) return;
+    hover = [x, y]; draw();
+    const v = px[y * 30 + x];
+    cap.innerHTML = `Row ${y + 1}, column ${x + 1}: brightness <span class="mono">${v}</span> of 255 → input <span class="mono">${(v / 255).toFixed(3)}</span><br>Input #${y * 30 + x + 1} of 960`;
+  };
+  cv.addEventListener("pointermove", pick);
+  cv.addEventListener("pointerleave", () => { hover = null; draw(); cap.textContent = "One training image, enlarged. Hover a pixel to see the number the network receives."; });
+})();
+
+// gallery
+(() => {
+  const g = ["down", "up", "hold", "stop"], subj = ["A", "D", "H", "K"];
+  let h = "<thead><tr><th></th>" + g.map(x => `<th scope="col" class="${x === "down" ? "down" : ""}">${x}</th>`).join("") + "</tr></thead><tbody>";
+  for (const s of subj) h += `<tr><th scope="row">Person ${s}</th>` + g.map(x => D.grid[`${s}_${x}`] ? `<td class="${x === "down" ? "down" : ""}"><img src="${D.grid[`${s}_${x}`]}" alt="Person ${s}, ${x} gesture"></td>` : "<td></td>").join("") + "</tr>";
+  document.getElementById("gallery").innerHTML = h + "</tbody>";
+  document.getElementById("facts").innerHTML =
+    `<span><b>${D.n_train}</b> training photos (<b>${D.pos_train}</b> down)</span>` +
+    `<span><b>${D.n_test}</b> test photos (<b>${D.pos_test}</b> down)</span>` +
+    `<span>Test photos come from people A–K only</span>`;
+})();
+
+// network diagram
+(() => {
+  const svg = document.getElementById("net"), NS = "http://www.w3.org/2000/svg";
+  const col = (x, n, top, gap) => Array.from({ length: n }, (_, i) => [x, top + i * gap]);
+  const inp = col(110, 8, 40, 30), hid = col(400, 6, 60, 34), out = [[680, 150]];
+  let s = "";
+  const line = (a, b, op) => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="var(--muted)" stroke-opacity="${op}" stroke-width="1"/>`;
+  inp.forEach(a => hid.forEach(b => s += line(a, b, .22)));
+  hid.forEach(a => s += line(a, out[0], .5));
+  const node = (p, r, fill, stroke) => `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+  inp.forEach((p, i) => { const v = [.15, .4, .9, .7, .3, .85, .55, .2][i]; s += node(p, 9, `rgb(${v * 255},${v * 255},${v * 255})`, "var(--muted)"); });
+  hid.forEach(p => s += node(p, 11, "var(--surface)", "var(--test)"));
+  s += node(out[0], 16, "var(--down-soft)", "var(--down)");
+  const txt = (x, y, t, a = "middle", c = "var(--muted)", sz = 12, f = "var(--mono)") => `<text x="${x}" y="${y}" text-anchor="${a}" fill="${c}" font-size="${sz}" font-family="${f}">${t}</text>`;
+  s += txt(110, 290, "⋮ 960 inputs") + txt(400, 290, "⋮ 100 hidden") + txt(680, 290, "1 output");
+  s += txt(80, 18, "pixel brightness", "middle", "var(--ink-2)", 13, "var(--body)");
+  s += txt(400, 30, "sigmoid units", "middle", "var(--ink-2)", 13, "var(--body)");
+  s += txt(680, 190, "score ≥ 0.5", "middle", "var(--ink)", 13, "var(--body)") + txt(680, 208, "→ “down”", "middle", "var(--down)", 13, "var(--body)");
+  svg.innerHTML = s;
+})();
+
+// accuracy chart
+(() => {
+  const plot = document.getElementById("plot"), tip = document.getElementById("tip");
+  const W = 900, H = 340, m = { l: 48, r: 120, t: 14, b: 40 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const y0 = 0.6, y1 = 1.0;
+  const X = e => m.l + (e / 1000) * iw, Y = v => m.t + (1 - (v - y0) / (y1 - y0)) * ih;
+  const path = k => D.hist.map((h, i) => `${i ? "L" : "M"}${X(h.epoch).toFixed(1)},${Y(h[k]).toFixed(1)}`).join("");
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart of training and test accuracy over 1000 epochs">`;
+  for (let v = 0.6; v <= 1.0001; v += 0.1) s += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="var(--mono)">${Math.round(v * 100)}%</text>`;
+  for (let e = 0; e <= 1000; e += 200) s += `<text x="${X(e)}" y="${H - m.b + 20}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="var(--mono)">${e}</text>`;
+  s += `<text x="${m.l + iw / 2}" y="${H - 4}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="var(--body)">Training pass (epoch)</text>`;
+  s += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(baseline)}" y2="${Y(baseline)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  s += `<path d="${path("train_acc")}" fill="none" stroke="var(--train)" stroke-width="2" stroke-linejoin="round"/>`;
+  s += `<path d="${path("test_acc")}" fill="none" stroke="var(--test)" stroke-width="2" stroke-linejoin="round"/>`;
+  const end = (k, c, lbl, dy) => `<circle cx="${X(1000)}" cy="${Y(last[k])}" r="4" fill="${c}" stroke="var(--surface)" stroke-width="2"/><text x="${X(1000) + 10}" y="${Y(last[k]) + 4 + dy}" font-size="12" fill="var(--ink)" font-family="var(--body)">${lbl} ${pct(last[k])}</text>`;
+  s += end("train_acc", "var(--train)", "Training", -2) + end("test_acc", "var(--test)", "Test", 4);
+  s += `<text x="${X(1000) + 10}" y="${Y(baseline) + 4}" font-size="12" fill="var(--muted)" font-family="var(--body)">Baseline ${pct(baseline)}</text>`;
+  s += `<line id="xh" y1="${m.t}" y2="${m.t + ih}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/><circle id="dtr" r="5" fill="var(--train)" stroke="var(--surface)" stroke-width="2" visibility="hidden"/><circle id="dte" r="5" fill="var(--test)" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`;
+  s += `<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
+  plot.insertAdjacentHTML("afterbegin", s);
+  const svg = plot.querySelector("svg"), xh = svg.querySelector("#xh"), dtr = svg.querySelector("#dtr"), dte = svg.querySelector("#dte");
+  const show = e => {
+    const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W;
+    const ep = (sx - m.l) / iw * 1000;
+    const h = D.hist.reduce((a, b) => Math.abs(b.epoch - ep) < Math.abs(a.epoch - ep) ? b : a);
+    [xh, dtr, dte].forEach(n => n.setAttribute("visibility", "visible"));
+    xh.setAttribute("x1", X(h.epoch)); xh.setAttribute("x2", X(h.epoch));
+    dtr.setAttribute("cx", X(h.epoch)); dtr.setAttribute("cy", Y(h.train_acc));
+    dte.setAttribute("cx", X(h.epoch)); dte.setAttribute("cy", Y(h.test_acc));
+    tip.hidden = false;
+    tip.innerHTML = `<b>Epoch ${h.epoch}</b><br><span class="k" style="background:var(--train)"></span>Training ${pct(h.train_acc)}<br><span class="k" style="background:var(--test)"></span>Test ${pct(h.test_acc)}`;
+    const px = X(h.epoch) / W * r.width, py = Math.min(Y(h.train_acc), Y(h.test_acc)) / H * r.height;
+    tip.style.left = Math.max(70, Math.min(r.width - 70, px)) + "px"; tip.style.top = Math.max(60, py - 8) + "px";
+  };
+  const hit = svg.querySelector("#hit");
+  hit.addEventListener("pointermove", show); hit.addEventListener("pointerdown", show);
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; [xh, dtr, dte].forEach(n => n.setAttribute("visibility", "hidden")); });
+  document.getElementById("tbl").innerHTML = "<thead><tr><th>Epoch</th><th>Training</th><th>Test</th></tr></thead><tbody>" +
+    D.hist.map(h => `<tr><td>${h.epoch}</td><td>${pct(h.train_acc)}</td><td>${pct(h.test_acc)}</td></tr>`).join("") + "</tbody>";
+})();
+
+// results
+(() => {
+  const c = D.cm;
+  document.getElementById("cm").innerHTML =
+    `<div></div><div class="h">Said down</div><div class="h">Said not down</div>` +
+    `<div class="h r">Was down</div><div class="c ok"><b>${c.tp}</b><small>caught</small></div><div class="c no"><b>${c.fn}</b><small>missed</small></div>` +
+    `<div class="h r">Wasn't</div><div class="c no"><b>${c.fp}</b><small>false alarm</small></div><div class="c ok"><b>${c.tn}</b><small>correctly ignored</small></div>`;
+  const ups = D.wrong.filter(w => !w.label && w.file.includes("_up_")).length;
+  document.getElementById("insight").textContent =
+    `${c.tp + c.tn} of ${D.n_test} test photos are classified correctly. ${ups === c.fp ? `All ${c.fp}` : `${ups} of the ${c.fp}`} false alarms are the “up” gesture: a vertical hand pointing the other way looks a lot like “down” at 32 × 30 pixels. The ${c.fn} missed “down” photos are mostly ones the network was confident about, which suggests those people hold the gesture differently from anyone in the training set.`;
+  document.getElementById("miss").innerHTML = D.wrong.map(w => {
+    const n = w.file.split("/").pop().replace(".pgm", ""), [p, g] = n.split("_");
+    return `<figure><img src="${w.img}" alt="Person ${p}, ${g} gesture"><figcaption><b>Person ${p} · ${g}</b><br>${w.label ? "Missed" : "False alarm"} · score <span class="mono">${w.p.toFixed(2)}</span></figcaption></figure>`;
+  }).join("");
+})();
+</script>
