@@ -1,0 +1,331 @@
+<title>Down-Gesture Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one 1040px reading column; hero splits into thesis + live pixel grid; sections stack with figures inline */
+:root {
+  --bg: #F3F5F7; --surface: #FCFCFB; --ink: #16202B; --ink-2: #4A5664; --muted: #6B7684;
+  --rule: #D9DFE6; --grid: #E6EAEF;
+  --test: #2F5BD3; --train: #C26A12; --down: #C26A12; --down-soft: #F6E6D3; --bad: #B4332A;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12171D; --surface: #1A1A19; --ink: #E8ECF0; --ink-2: #B3BDC8; --muted: #8E99A6;
+  --rule: #2D3640; --grid: #252D36; --test: #6E8DEB; --train: #C97A2A; --down: #D98A36; --down-soft: #3A2A18; --bad: #E2675C;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12171D; --surface: #1A1A19; --ink: #E8ECF0; --ink-2: #B3BDC8; --muted: #8E99A6;
+  --rule: #2D3640; --grid: #252D36; --test: #6E8DEB; --train: #C97A2A; --down: #D98A36; --down-soft: #3A2A18; --bad: #E2675C;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: grid; gap: 72px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; letter-spacing: -0.01em }
+h1 { font-size: clamp(2.1rem, 5.2vw, 3.4rem); font-weight: 700 }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600 }
+h3 { font-size: 1.1rem; font-weight: 600 }
+p { margin: 0; max-width: 65ch; color: var(--ink-2) }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
+a { color: var(--test) }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--test); outline-offset: 2px }
+section { display: grid; gap: 20px }
+.lede { font-size: 1.15rem }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: center }
+.hero-text { display: grid; gap: 20px; min-width: 0 }
+.stats { display: flex; flex-wrap: wrap; gap: 12px 36px; padding-top: 8px; border-top: 1px solid var(--rule) }
+.stat { display: grid; gap: 2px }
+.stat b { font-family: var(--display); font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink) }
+.stat span { font-size: 13px; color: var(--muted) }
+.pixfig { display: grid; gap: 10px; justify-items: center; margin: 0 }
+.pixfig canvas { width: 100%; max-width: 360px; aspect-ratio: 30 / 32; image-rendering: pixelated; border-radius: 4px; cursor: crosshair; display: block }
+.pixfig figcaption { font-size: 13px; color: var(--muted); text-align: center; min-height: 2.6em }
+.pixfig figcaption .mono { color: var(--ink) }
+
+/* gallery */
+.gallery { overflow-x: auto }
+.gallery table { border-collapse: separate; border-spacing: 8px; margin: -8px }
+.gallery th { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; text-align: center }
+.gallery th.down { color: var(--down) }
+.gallery th[scope=row] { text-align: right; padding-right: 4px; white-space: nowrap }
+.gallery td { padding: 0 }
+.gallery img { width: 88px; height: auto; image-rendering: pixelated; display: block; border-radius: 3px; border: 2px solid transparent }
+.gallery td.down img { border-color: var(--down) }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 14px; color: var(--ink-2) }
+.facts b { color: var(--ink); font-variant-numeric: tabular-nums }
+
+/* network */
+.net { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; overflow-x: auto }
+.net svg { display: block; width: 100%; min-width: 560px; height: auto }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; list-style: none; margin: 0; padding: 0; counter-reset: s }
+.steps li { display: grid; gap: 6px; counter-increment: s; min-width: 0 }
+.steps li::before { content: "Step " counter(s); font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase }
+.steps p { font-size: 15px }
+
+/* chart */
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; display: grid; gap: 12px }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; align-items: baseline }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2) }
+.legend span { display: inline-flex; align-items: center; gap: 6px }
+.legend i { width: 16px; height: 2px; display: inline-block }
+.plot { position: relative }
+.plot svg { display: block; width: 100%; height: auto; overflow: visible }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 8px 10px; border-radius: 6px; white-space: nowrap; line-height: 1.5; transform: translate(-50%, -110%) }
+.tip .k { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px }
+details { font-size: 14px; color: var(--ink-2) }
+summary { cursor: pointer; color: var(--muted) }
+.tbl { overflow-x: auto; max-height: 280px; margin-top: 8px }
+.tbl table { border-collapse: collapse; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums }
+.tbl th, .tbl td { padding: 3px 14px 3px 0; text-align: right; border-bottom: 1px solid var(--grid) }
+
+/* results */
+.results { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 40px; align-items: start }
+.cm { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; font-size: 13px }
+.cm .h { color: var(--muted); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: end; justify-content: center; padding: 4px; text-align: center }
+.cm .r { justify-content: flex-end; align-items: center; text-align: right }
+.cm .c { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 14px 8px; text-align: center; display: grid; gap: 2px }
+.cm .c b { font-family: var(--display); font-size: 1.8rem; font-variant-numeric: tabular-nums }
+.cm .c small { color: var(--muted) }
+.cm .c.ok b { color: var(--ink) }
+.cm .c.no b { color: var(--bad) }
+.miss { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px }
+.miss figure { margin: 0; display: grid; gap: 6px; min-width: 0 }
+.miss img { width: 100%; image-rendering: pixelated; border-radius: 3px; display: block }
+.miss figcaption { font-size: 12px; line-height: 1.45; color: var(--muted) }
+.miss figcaption b { color: var(--ink); font-weight: 600 }
+.callout { border-left: 3px solid var(--down); padding: 4px 0 4px 16px }
+
+footer { border-top: 1px solid var(--rule); padding-top: 20px; display: grid; gap: 10px; font-size: 14px }
+footer p { font-size: 14px }
+
+@media (max-width: 760px) {
+  .hero, .results { grid-template-columns: minmax(0, 1fr) }
+  .hero { gap: 28px }
+  .gallery img { width: 64px }
+}
+</style>
+
+<main class="wrap">
+  <header class="hero">
+    <div class="hero-text">
+      <span class="eyebrow">Neural network from scratch · Python + NumPy</span>
+      <h1>Spotting a downward hand in 960 pixels</h1>
+      <p class="lede">A small neural network, written by hand without an ML framework, looks at a tiny grayscale photo of a hand and decides one thing: is this the “down” gesture or not?</p>
+      <div class="stats">
+        <div class="stat"><b id="s-acc">–</b><span>accuracy on unseen photos</span></div>
+        <div class="stat"><b id="s-base">–</b><span>if it always guessed “not down”</span></div>
+        <div class="stat"><b>13</b><span>people photographed</span></div>
+      </div>
+    </div>
+    <figure class="pixfig">
+      <canvas id="pix" width="300" height="320" aria-label="A 32 by 30 pixel grayscale photo of a hand making the down gesture, enlarged"></canvas>
+      <figcaption id="pixcap">One training image, enlarged. Hover a pixel to see the number the network receives.</figcaption>
+    </figure>
+  </header>
+
+  <section>
+    <span class="eyebrow">The data</span>
+    <h2>Four gestures, thirteen people, one question</h2>
+    <p>Each photo is 32 pixels tall and 30 wide, in grayscale. Thirteen volunteers (A to M) each held their hand in four poses. The network only has to separate <strong style="color:var(--down)">down</strong> from the other three, which makes this a yes-or-no problem.</p>
+    <div class="gallery">
+      <table id="gallery"></table>
+    </div>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <section>
+    <span class="eyebrow">How it works</span>
+    <h2>Three layers and a lot of small corrections</h2>
+    <p>Every pixel becomes a number between 0 (black) and 1 (white). Those 960 numbers feed 100 hidden units, and each hidden unit learns its own weighted mix of the pixels. A single output unit combines the hidden units into a score between 0 and 1. A score of 0.5 or more means “down”.</p>
+    <div class="net"><svg id="net" viewBox="0 0 760 300" role="img" aria-label="Network diagram: 960 pixel inputs connect to 100 hidden units, which connect to one output"></svg></div>
+    <ol class="steps">
+      <li><h3>Guess</h3><p>Pass a photo through the network and read the score, starting from small random weights.</p></li>
+      <li><h3>Measure the miss</h3><p>Compare the score with the right answer (1 for down, 0 otherwise) using squared error.</p></li>
+      <li><h3>Nudge every weight</h3><p>Backpropagation works out how much each of the ~96,000 weights caused the miss and moves it slightly the other way, with a learning rate of 0.1.</p></li>
+      <li><h3>Repeat</h3><p>Do this for every training photo, then go through the whole set again. The script runs 1,000 passes (epochs).</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="eyebrow">Training</span>
+    <h2>It memorises the training set, and still generalises</h2>
+    <p>For the first few dozen passes the network just says “not down” for everything. Then it starts picking up the shape of the gesture. Training accuracy reaches 100%, while accuracy on photos it never trained on settles around 91%, well above the 78% you would get by always saying “not down”.</p>
+    <div class="chart">
+      <div class="chart-head">
+        <h3>Accuracy by training pass</h3>
+        <div class="legend">
+          <span><i style="background:var(--train)"></i>Training photos</span>
+          <span><i style="background:var(--test)"></i>Unseen test photos</span>
+          <span><i style="background:repeating-linear-gradient(90deg,var(--muted) 0 4px,transparent 4px 7px)"></i>Always “not down”</span>
+        </div>
+      </div>
+      <div class="plot" id="plot"><div class="tip" id="tip" hidden></div></div>
+      <details><summary>Show the numbers as a table</summary><div class="tbl"><table id="tbl"></table></div></details>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Results</span>
+    <h2>Where it gets it wrong</h2>
+    <div class="results">
+      <div style="display:grid;gap:12px">
+        <div class="cm" id="cm"></div>
+        <p style="font-size:14px">Test set of <span id="ntest"></span> photos the network never saw while training.</p>
+      </div>
+      <div style="display:grid;gap:16px;min-width:0">
+        <p class="callout" id="insight"></p>
+        <div class="miss" id="miss"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="eyebrow">About these numbers</span>
+    <p>The original script loops over every weight in plain Python. To make 1,000 epochs practical, the results here come from a NumPy version of the same algorithm: the same 960‑100‑1 sigmoid network, weight initialisation, per-photo updates, learning rate and epoch count, with a fixed random seed. The image lists in the repo name <span id="nmissing"></span> files that are not in the <span class="mono">gestures/</span> folder, so training used the <span id="npresent"></span> photos that exist. A different seed will move test accuracy by a few points.</p>
+    <p>Source: <a href="https://github.com/shashankkhash/Hand-Gestures-Classifier" target="_blank" rel="noopener">shashankkhash/Hand-Gestures-Classifier</a></p>
+  </footer>
+</main>
+
+<script>
+const D = __DATA__;
+const pct = v => (v * 100).toFixed(1) + "%";
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const last = D.hist[D.hist.length - 1];
+const baseline = 1 - D.pos_test / D.n_test;
+document.getElementById("s-acc").textContent = pct(last.test_acc);
+document.getElementById("s-base").textContent = pct(baseline);
+document.getElementById("ntest").textContent = D.n_test;
+document.getElementById("npresent").textContent = D.n_train + D.n_test;
+document.getElementById("nmissing").textContent = 21;
+
+// hero pixel grid
+(() => {
+  const cv = document.getElementById("pix"), ctx = cv.getContext("2d"), cap = document.getElementById("pixcap");
+  const img = new Image(), S = 10; let px = null, hover = null;
+  const draw = () => {
+    if (!px) return;
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 30; x++) {
+      const v = px[y * 30 + x]; ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect(x * S, y * S, S, S);
+    }
+    ctx.strokeStyle = "rgba(128,128,128,.28)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 0; x <= 30; x++) { ctx.moveTo(x * S + .5, 0); ctx.lineTo(x * S + .5, 320); }
+    for (let y = 0; y <= 32; y++) { ctx.moveTo(0, y * S + .5); ctx.lineTo(300, y * S + .5); }
+    ctx.stroke();
+    if (hover) { ctx.strokeStyle = css("--down"); ctx.lineWidth = 3; ctx.strokeRect(hover[0] * S + 1.5, hover[1] * S + 1.5, S - 3, S - 3); }
+  };
+  img.onload = () => {
+    const t = document.createElement("canvas"); t.width = 30; t.height = 32;
+    const tc = t.getContext("2d"); tc.drawImage(img, 0, 0);
+    const d = tc.getImageData(0, 0, 30, 32).data; px = [];
+    for (let i = 0; i < d.length; i += 4) px.push(d[i]);
+    draw();
+  };
+  img.src = D.grid["H_down"];
+  const pick = e => {
+    const r = cv.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * 30), y = Math.floor((e.clientY - r.top) / r.height * 32);
+    if (x < 0 || y < 0 || x > 29 || y > 31 || !px) return;
+    hover = [x, y]; draw();
+    const v = px[y * 30 + x];
+    cap.innerHTML = `Row ${y + 1}, column ${x + 1}: brightness <span class="mono">${v}</span> of 255 → input <span class="mono">${(v / 255).toFixed(3)}</span><br>Input #${y * 30 + x + 1} of 960`;
+  };
+  cv.addEventListener("pointermove", pick);
+  cv.addEventListener("pointerleave", () => { hover = null; draw(); cap.textContent = "One training image, enlarged. Hover a pixel to see the number the network receives."; });
+})();
+
+// gallery
+(() => {
+  const g = ["down", "up", "hold", "stop"], subj = ["A", "D", "H", "K"];
+  let h = "<thead><tr><th></th>" + g.map(x => `<th scope="col" class="${x === "down" ? "down" : ""}">${x}</th>`).join("") + "</tr></thead><tbody>";
+  for (const s of subj) h += `<tr><th scope="row">Person ${s}</th>` + g.map(x => D.grid[`${s}_${x}`] ? `<td class="${x === "down" ? "down" : ""}"><img src="${D.grid[`${s}_${x}`]}" alt="Person ${s}, ${x} gesture"></td>` : "<td></td>").join("") + "</tr>";
+  document.getElementById("gallery").innerHTML = h + "</tbody>";
+  document.getElementById("facts").innerHTML =
+    `<span><b>${D.n_train}</b> training photos (<b>${D.pos_train}</b> down)</span>` +
+    `<span><b>${D.n_test}</b> test photos (<b>${D.pos_test}</b> down)</span>` +
+    `<span>Test photos come from people A–K only</span>`;
+})();
+
+// network diagram
+(() => {
+  const svg = document.getElementById("net"), NS = "http://www.w3.org/2000/svg";
+  const col = (x, n, top, gap) => Array.from({ length: n }, (_, i) => [x, top + i * gap]);
+  const inp = col(110, 8, 40, 30), hid = col(400, 6, 60, 34), out = [[680, 150]];
+  let s = "";
+  const line = (a, b, op) => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="var(--muted)" stroke-opacity="${op}" stroke-width="1"/>`;
+  inp.forEach(a => hid.forEach(b => s += line(a, b, .22)));
+  hid.forEach(a => s += line(a, out[0], .5));
+  const node = (p, r, fill, stroke) => `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+  inp.forEach((p, i) => { const v = [.15, .4, .9, .7, .3, .85, .55, .2][i]; s += node(p, 9, `rgb(${v * 255},${v * 255},${v * 255})`, "var(--muted)"); });
+  hid.forEach(p => s += node(p, 11, "var(--surface)", "var(--test)"));
+  s += node(out[0], 16, "var(--down-soft)", "var(--down)");
+  const txt = (x, y, t, a = "middle", c = "var(--muted)", sz = 12, f = "var(--mono)") => `<text x="${x}" y="${y}" text-anchor="${a}" fill="${c}" font-size="${sz}" font-family="${f}">${t}</text>`;
+  s += txt(110, 290, "⋮ 960 inputs") + txt(400, 290, "⋮ 100 hidden") + txt(680, 290, "1 output");
+  s += txt(80, 18, "pixel brightness", "middle", "var(--ink-2)", 13, "var(--body)");
+  s += txt(400, 30, "sigmoid units", "middle", "var(--ink-2)", 13, "var(--body)");
+  s += txt(680, 190, "score ≥ 0.5", "middle", "var(--ink)", 13, "var(--body)") + txt(680, 208, "→ “down”", "middle", "var(--down)", 13, "var(--body)");
+  svg.innerHTML = s;
+})();
+
+// accuracy chart
+(() => {
+  const plot = document.getElementById("plot"), tip = document.getElementById("tip");
+  const W = 900, H = 340, m = { l: 48, r: 120, t: 14, b: 40 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const y0 = 0.6, y1 = 1.0;
+  const X = e => m.l + (e / 1000) * iw, Y = v => m.t + (1 - (v - y0) / (y1 - y0)) * ih;
+  const path = k => D.hist.map((h, i) => `${i ? "L" : "M"}${X(h.epoch).toFixed(1)},${Y(h[k]).toFixed(1)}`).join("");
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart of training and test accuracy over 1000 epochs">`;
+  for (let v = 0.6; v <= 1.0001; v += 0.1) s += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="var(--mono)">${Math.round(v * 100)}%</text>`;
+  for (let e = 0; e <= 1000; e += 200) s += `<text x="${X(e)}" y="${H - m.b + 20}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="var(--mono)">${e}</text>`;
+  s += `<text x="${m.l + iw / 2}" y="${H - 4}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="var(--body)">Training pass (epoch)</text>`;
+  s += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(baseline)}" y2="${Y(baseline)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  s += `<path d="${path("train_acc")}" fill="none" stroke="var(--train)" stroke-width="2" stroke-linejoin="round"/>`;
+  s += `<path d="${path("test_acc")}" fill="none" stroke="var(--test)" stroke-width="2" stroke-linejoin="round"/>`;
+  const end = (k, c, lbl, dy) => `<circle cx="${X(1000)}" cy="${Y(last[k])}" r="4" fill="${c}" stroke="var(--surface)" stroke-width="2"/><text x="${X(1000) + 10}" y="${Y(last[k]) + 4 + dy}" font-size="12" fill="var(--ink)" font-family="var(--body)">${lbl} ${pct(last[k])}</text>`;
+  s += end("train_acc", "var(--train)", "Training", -2) + end("test_acc", "var(--test)", "Test", 4);
+  s += `<text x="${X(1000) + 10}" y="${Y(baseline) + 4}" font-size="12" fill="var(--muted)" font-family="var(--body)">Baseline ${pct(baseline)}</text>`;
+  s += `<line id="xh" y1="${m.t}" y2="${m.t + ih}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/><circle id="dtr" r="5" fill="var(--train)" stroke="var(--surface)" stroke-width="2" visibility="hidden"/><circle id="dte" r="5" fill="var(--test)" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`;
+  s += `<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
+  plot.insertAdjacentHTML("afterbegin", s);
+  const svg = plot.querySelector("svg"), xh = svg.querySelector("#xh"), dtr = svg.querySelector("#dtr"), dte = svg.querySelector("#dte");
+  const show = e => {
+    const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W;
+    const ep = (sx - m.l) / iw * 1000;
+    const h = D.hist.reduce((a, b) => Math.abs(b.epoch - ep) < Math.abs(a.epoch - ep) ? b : a);
+    [xh, dtr, dte].forEach(n => n.setAttribute("visibility", "visible"));
+    xh.setAttribute("x1", X(h.epoch)); xh.setAttribute("x2", X(h.epoch));
+    dtr.setAttribute("cx", X(h.epoch)); dtr.setAttribute("cy", Y(h.train_acc));
+    dte.setAttribute("cx", X(h.epoch)); dte.setAttribute("cy", Y(h.test_acc));
+    tip.hidden = false;
+    tip.innerHTML = `<b>Epoch ${h.epoch}</b><br><span class="k" style="background:var(--train)"></span>Training ${pct(h.train_acc)}<br><span class="k" style="background:var(--test)"></span>Test ${pct(h.test_acc)}`;
+    const px = X(h.epoch) / W * r.width, py = Math.min(Y(h.train_acc), Y(h.test_acc)) / H * r.height;
+    tip.style.left = Math.max(70, Math.min(r.width - 70, px)) + "px"; tip.style.top = Math.max(60, py - 8) + "px";
+  };
+  const hit = svg.querySelector("#hit");
+  hit.addEventListener("pointermove", show); hit.addEventListener("pointerdown", show);
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; [xh, dtr, dte].forEach(n => n.setAttribute("visibility", "hidden")); });
+  document.getElementById("tbl").innerHTML = "<thead><tr><th>Epoch</th><th>Training</th><th>Test</th></tr></thead><tbody>" +
+    D.hist.map(h => `<tr><td>${h.epoch}</td><td>${pct(h.train_acc)}</td><td>${pct(h.test_acc)}</td></tr>`).join("") + "</tbody>";
+})();
+
+// results
+(() => {
+  const c = D.cm;
+  document.getElementById("cm").innerHTML =
+    `<div></div><div class="h">Said down</div><div class="h">Said not down</div>` +
+    `<div class="h r">Was down</div><div class="c ok"><b>${c.tp}</b><small>caught</small></div><div class="c no"><b>${c.fn}</b><small>missed</small></div>` +
+    `<div class="h r">Wasn't</div><div class="c no"><b>${c.fp}</b><small>false alarm</small></div><div class="c ok"><b>${c.tn}</b><small>correctly ignored</small></div>`;
+  const ups = D.wrong.filter(w => !w.label && w.file.includes("_up_")).length;
+  document.getElementById("insight").textContent =
+    `${c.tp + c.tn} of ${D.n_test} test photos are classified correctly. ${ups === c.fp ? `All ${c.fp}` : `${ups} of the ${c.fp}`} false alarms are the “up” gesture: a vertical hand pointing the other way looks a lot like “down” at 32 × 30 pixels. The ${c.fn} missed “down” photos are mostly ones the network was confident about, which suggests those people hold the gesture differently from anyone in the training set.`;
+  document.getElementById("miss").innerHTML = D.wrong.map(w => {
+    const n = w.file.split("/").pop().replace(".pgm", ""), [p, g] = n.split("_");
+    return `<figure><img src="${w.img}" alt="Person ${p}, ${g} gesture"><figcaption><b>Person ${p} · ${g}</b><br>${w.label ? "Missed" : "False alarm"} · score <span class="mono">${w.p.toFixed(2)}</span></figcaption></figure>`;
+  }).join("");
+})();
+</script>
